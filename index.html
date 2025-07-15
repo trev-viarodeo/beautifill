@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Filling Services Wizard</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+            animation: fadeIn 0.3s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const { Plus, X, Package, Calculator, ShoppingCart, Check, Edit3, Trash2 } = lucide;
+
+        // Constants
+        const packageCatalog = [
+            { id: 1, name: "Glass Dropper Bottle", size: "5ml", volume: 5, price: 2.50, image: "🧪", category: "samples" },
+            { id: 2, name: "Plastic Sample Vial", size: "3ml", volume: 3, price: 1.25, image: "🧴", category: "samples" },
+            { id: 3, name: "Mini Jar", size: "10ml", volume: 10, price: 3.00, image: "🫙", category: "samples" },
+            { id: 4, name: "Pump Bottle", size: "30ml", volume: 30, price: 4.50, image: "🧴", category: "retail" },
+            { id: 5, name: "Tube Container", size: "50ml", volume: 50, price: 5.25, image: "🧴", category: "retail" },
+            { id: 6, name: "Premium Glass Jar", size: "30ml", volume: 30, price: 6.00, image: "🫙", category: "retail" }
+        ];
+
+        const pricing = {
+            fillMethod: {
+                vats: { basePrice: 0.40, setup: 25, name: "From Vats" },
+                fullsize: { basePrice: 0.65, setup: 50, name: "From Full-size Units" }
+            }
+        };
+
+        // Icon components
+        const Icon = ({ icon: IconComponent, ...props }) => {
+            return React.createElement(IconComponent, props);
+        };
+
+        // Main Component
+        const FillingServicesWizard = () => {
+            const [completedProducts, setCompletedProducts] = useState([]);
+            const [currentProduct, setCurrentProduct] = useState({
+                id: null,
+                name: '',
+                packageFilter: '',
+                selectedPackage: null,
+                calculationMode: '',
+                amountPerUnit: '',
+                numberOfUnits: '',
+                targetUnits: '',
+                fillMethod: '',
+                estimates: { units: 0, price: 0, efficiency: 0, materialNeeded: 0 }
+            });
+            const [showProductForm, setShowProductForm] = useState(false);
+            const [showCustomerForm, setShowCustomerForm] = useState(false);
+            const [customerDetails, setCustomerDetails] = useState({ name: '', email: '' });
+
+            // Calculate estimates
+            useEffect(() => {
+                if (currentProduct.selectedPackage && currentProduct.fillMethod) {
+                    const packageVolume = currentProduct.selectedPackage.volume;
+                    const fillMethodPricing = pricing.fillMethod[currentProduct.fillMethod];
+                    
+                    let units = 0;
+                    let materialNeeded = 0;
+                    let efficiency = 0;
+                    
+                    if (currentProduct.calculationMode === 'material-to-units' && currentProduct.amountPerUnit && currentProduct.numberOfUnits) {
+                        const totalMaterial = parseFloat(currentProduct.amountPerUnit) * parseInt(currentProduct.numberOfUnits);
+                        units = Math.floor(totalMaterial / packageVolume);
+                        materialNeeded = totalMaterial;
+                        efficiency = units > 0 ? (totalMaterial / (packageVolume * units)) * 100 : 0;
+                    } else if (currentProduct.calculationMode === 'units-to-material' && currentProduct.targetUnits) {
+                        units = parseInt(currentProduct.targetUnits);
+                        materialNeeded = units * packageVolume;
+                        efficiency = 100;
+                    }
+                    
+                    const packageCost = currentProduct.selectedPackage.price;
+                    const totalPrice = units > 0 ? fillMethodPricing.setup + (fillMethodPricing.basePrice * units) + (packageCost * units) : 0;
+
+                    setCurrentProduct(prev => ({
+                        ...prev,
+                        estimates: {
+                            units,
+                            price: totalPrice,
+                            efficiency,
+                            materialNeeded
+                        }
+                    }));
+                } else {
+                    setCurrentProduct(prev => ({
+                        ...prev,
+                        estimates: { units: 0, price: 0, efficiency: 0, materialNeeded: 0 }
+                    }));
+                }
+            }, [currentProduct.amountPerUnit, currentProduct.numberOfUnits, currentProduct.targetUnits, currentProduct.calculationMode, currentProduct.selectedPackage, currentProduct.fillMethod]);
+
+            const startNewProduct = () => {
+                setCurrentProduct({
+                    id: Date.now(),
+                    name: '',
+                    packageFilter: '',
+                    selectedPackage: null,
+                    calculationMode: '',
+                    amountPerUnit: '',
+                    numberOfUnits: '',
+                    targetUnits: '',
+                    fillMethod: '',
+                    estimates: { units: 0, price: 0, efficiency: 0, materialNeeded: 0 }
+                });
+                setShowProductForm(true);
+            };
+
+            const saveProduct = () => {
+                if (isProductComplete()) {
+                    setCompletedProducts(prev => [...prev, { ...currentProduct }]);
+                    setShowProductForm(false);
+                    setCurrentProduct({
+                        id: null,
+                        name: '',
+                        packageFilter: '',
+                        selectedPackage: null,
+                        calculationMode: '',
+                        amountPerUnit: '',
+                        numberOfUnits: '',
+                        targetUnits: '',
+                        fillMethod: '',
+                        estimates: { units: 0, price: 0, efficiency: 0, materialNeeded: 0 }
+                    });
+                }
+            };
+
+            const editProduct = (productId) => {
+                const product = completedProducts.find(p => p.id === productId);
+                if (product) {
+                    setCurrentProduct(product);
+                    setCompletedProducts(prev => prev.filter(p => p.id !== productId));
+                    setShowProductForm(true);
+                }
+            };
+
+            const deleteProduct = (productId) => {
+                setCompletedProducts(prev => prev.filter(p => p.id !== productId));
+            };
+
+            const cancelProduct = () => {
+                setShowProductForm(false);
+                setCurrentProduct({
+                    id: null,
+                    name: '',
+                    packageFilter: '',
+                    selectedPackage: null,
+                    calculationMode: '',
+                    amountPerUnit: '',
+                    numberOfUnits: '',
+                    targetUnits: '',
+                    fillMethod: '',
+                    estimates: { units: 0, price: 0, efficiency: 0, materialNeeded: 0 }
+                });
+            };
+
+            const isProductComplete = () => {
+                const baseComplete = currentProduct.name && 
+                                    currentProduct.selectedPackage &&
+                                    currentProduct.calculationMode && 
+                                    currentProduct.fillMethod;
+                
+                if (currentProduct.calculationMode === 'material-to-units') {
+                    return baseComplete && currentProduct.amountPerUnit && currentProduct.numberOfUnits;
+                } else if (currentProduct.calculationMode === 'units-to-material') {
+                    return baseComplete && currentProduct.targetUnits;
+                }
+                
+                return baseComplete;
+            };
+
+            const getTotalEstimates = () => {
+                return completedProducts.reduce((totals, product) => ({
+                    units: totals.units + product.estimates.units,
+                    price: totals.price + product.estimates.price
+                }), { units: 0, price: 0 });
+            };
+
+            const generateOrderSummary = () => {
+                const totals = getTotalEstimates();
+                const orderDate = new Date().toLocaleDateString();
+                
+                let summary = `FILLING SERVICES ORDER\n`;
+                summary += `Date: ${orderDate}\n`;
+                summary += `Order Reference: ORD-${Date.now()}\n`;
+                
+                if (customerDetails.name || customerDetails.email) {
+                    summary += `\nCUSTOMER DETAILS\n`;
+                    summary += `Name: ${customerDetails.name}\n`;
+                    summary += `Email: ${customerDetails.email}\n`;
+                }
+                
+                summary += `\n===============================\n\n`;
+                
+                completedProducts.forEach((product, index) => {
+                    summary += `PRODUCT ${index + 1}: ${product.name}\n`;
+                    summary += `Package: ${product.selectedPackage.name} (${product.selectedPackage.size})\n`;
+                    summary += `Fill Method: ${pricing.fillMethod[product.fillMethod].name}\n`;
+                    
+                    if (product.calculationMode === 'material-to-units') {
+                        summary += `Material: ${product.numberOfUnits} units × ${product.amountPerUnit} g/mL = ${(product.numberOfUnits * product.amountPerUnit).toFixed(0)} total\n`;
+                    } else {
+                        summary += `Target: ${product.targetUnits} units (${product.estimates.materialNeeded.toFixed(1)} g/mL needed)\n`;
+                    }
+                    
+                    summary += `\nCost Breakdown:\n`;
+                    summary += `- Setup Fee: $${pricing.fillMethod[product.fillMethod].setup.toFixed(2)}\n`;
+                    summary += `- Filling (${product.estimates.units} × $${pricing.fillMethod[product.fillMethod].basePrice}): $${(product.estimates.units * pricing.fillMethod[product.fillMethod].basePrice).toFixed(2)}\n`;
+                    summary += `- Packaging (${product.estimates.units} × $${product.selectedPackage.price}): $${(product.estimates.units * product.selectedPackage.price).toFixed(2)}\n`;
+                    summary += `Subtotal: $${product.estimates.price.toFixed(2)}\n\n`;
+                    summary += `-------------------------------\n\n`;
+                });
+                
+                summary += `ORDER TOTAL\n`;
+                summary += `Total Units: ${totals.units}\n`;
+                summary += `Total Price: $${totals.price.toFixed(2)}\n`;
+                
+                return summary;
+            };
+
+            const submitOrder = () => {
+                setShowCustomerForm(true);
+            };
+
+            const finalizeOrder = () => {
+                if (!customerDetails.name || !customerDetails.email) {
+                    alert('Please provide both name and email to submit the order.');
+                    return;
+                }
+
+                const orderSummary = generateOrderSummary();
+                const encodedSummary = encodeURIComponent(orderSummary);
+                const subject = encodeURIComponent(`Filling Services Order - ${customerDetails.name} - ${completedProducts.length} Products`);
+                
+                const mailtoLink = `mailto:trevor@viarodeo.co?subject=${subject}&body=${encodedSummary}`;
+                
+                const blob = new Blob([orderSummary], { type: 'text/plain' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `filling-order-${customerDetails.name.replace(/\s+/g, '-')}-${Date.now()}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                window.location.href = mailtoLink;
+                
+                setShowCustomerForm(false);
+                setCustomerDetails({ name: '', email: '' });
+                setCompletedProducts([]);
+                
+                alert(`Order has been prepared for ${customerDetails.name}. Your email client should open with the order details. Please send the email to complete your order submission.`);
+            };
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 pb-32">
+                    <div className="max-w-6xl mx-auto p-6">
+                        {/* Header */}
+                        <div className="text-center mb-8">
+                            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+                                Filling Services
+                            </h1>
+                            <p className="text-gray-600">Configure each product individually and see instant results</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            {/* Left Column - Product Configuration */}
+                            <div className="lg:col-span-2">
+                                {!showProductForm ? (
+                                    completedProducts.length === 0 ? (
+                                        <div className="bg-white rounded-xl shadow-lg p-8 text-center">
+                                            <div className="text-6xl mb-6">🧪</div>
+                                            <h2 className="text-2xl font-bold text-gray-800 mb-4">Ready to Configure Your Products?</h2>
+                                            <p className="text-gray-600 mb-8">Add products one by one and see instant estimates for each configuration.</p>
+                                            <button
+                                                onClick={startNewProduct}
+                                                className="inline-flex items-center space-x-2 px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:shadow-xl transition-all transform hover:scale-105"
+                                            >
+                                                <Icon icon={Plus} size={24} />
+                                                <span>Add Your First Product</span>
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-white rounded-xl shadow-lg p-8 text-center">
+                                            <div className="text-4xl mb-4">📦</div>
+                                            <h2 className="text-xl font-bold text-gray-800 mb-4">Configure Another Product?</h2>
+                                            <p className="text-gray-600 mb-6">Add more products to your order or review your current selections.</p>
+                                            <button
+                                                onClick={startNewProduct}
+                                                className="inline-flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                                            >
+                                                <Icon icon={Plus} size={20} />
+                                                <span>Add Another Product</span>
+                                            </button>
+                                        </div>
+                                    )
+                                ) : (
+                                    /* Product Configuration Form */
+                                    <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                                        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6">
+                                            <div className="flex justify-between items-center">
+                                                <h2 className="text-xl font-semibold">Configure Product</h2>
+                                                <button
+                                                    onClick={cancelProduct}
+                                                    className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-full transition-colors"
+                                                >
+                                                    <Icon icon={X} size={20} />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-6 space-y-8">
+                                            {/* Step 1: Product Name */}
+                                            <div className="space-y-4">
+                                                <div className="flex items-center space-x-2 mb-4">
+                                                    <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold">1</div>
+                                                    <h3 className="text-lg font-semibold text-gray-800">Product Name</h3>
+                                                </div>
+                                                
+                                                <div>
+                                                    <label className="block text-sm font-medium mb-2 text-gray-700">What product are you filling?</label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentProduct.name}
+                                                        onChange={(e) => setCurrentProduct(prev => ({ ...prev, name: e.target.value }))}
+                                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="e.g., Lavender Essential Oil"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Step 2: Package Selection */}
+                                            {currentProduct.name && (
+                                                <div className="space-y-4 animate-fadeIn">
+                                                    <div className="flex items-center space-x-2 mb-4">
+                                                        <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center font-semibold">2</div>
+                                                        <h3 className="text-lg font-semibold text-gray-800">Choose Packaging</h3>
+                                                    </div>
+                                                    
+                                                    <div className="flex space-x-2 mb-4">
+                                                        <button
+                                                            onClick={() => setCurrentProduct(prev => ({ ...prev, packageFilter: 'samples' }))}
+                                                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                                                currentProduct.packageFilter === 'samples' 
+                                                                    ? 'bg-blue-600 text-white' 
+                                                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                            }`}
+                                                        >
+                                                            Samples (3-10ml)
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setCurrentProduct(prev => ({ ...prev, packageFilter: 'retail' }))}
+                                                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                                                currentProduct.packageFilter === 'retail' 
+                                                                    ? 'bg-blue-600 text-white' 
+                                                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                            }`}
+                                                        >
+                                                            Retail (30-50ml)
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                                        {packageCatalog
+                                                            .filter(pkg => !currentProduct.packageFilter || pkg.category === currentProduct.packageFilter)
+                                                            .map((pkg) => (
+                                                            <div
+                                                                key={pkg.id}
+                                                                onClick={() => setCurrentProduct(prev => ({ ...prev, selectedPackage: pkg }))}
+                                                                className={`border-2 rounded-lg p-3 cursor-pointer transition-all hover:shadow-md text-center ${
+                                                                    currentProduct.selectedPackage?.id === pkg.id
+                                                                        ? 'border-blue-500 bg-blue-50 shadow-md'
+                                                                        : 'border-gray-200 hover:border-gray-300'
+                                                                }`}
+                                                            >
+                                                                <div className="text-2xl mb-1">{pkg.image}</div>
+                                                                <h4 className="font-semibold text-sm text-gray-800">{pkg.name}</h4>
+                                                                <p className="text-xs text-gray-600">{pkg.size}</p>
+                                                                <p className="text-sm font-bold text-green-600">${pkg.price}</p>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Step 3: Calculation Mode */}
+                                            {currentProduct.selectedPackage && (
+                                                <div className="space-y-4 animate-fadeIn">
+                                                    <div className="flex items-center space-x-2 mb-4">
+                                                        <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center font-semibold">3</div>
+                                                        <h3 className="text-lg font-semibold text-gray-800">How do you want to calculate?</h3>
+                                                    </div>
+                                                    
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div
+                                                            onClick={() => setCurrentProduct(prev => ({ ...prev, calculationMode: 'material-to-units' }))}
+                                                            className={`border-2 rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
+                                                                currentProduct.calculationMode === 'material-to-units'
+                                                                    ? 'border-blue-500 bg-blue-50 shadow-md'
+                                                                    : 'border-gray-200 hover:border-gray-300'
+                                                            }`}
+                                                        >
+                                                            <div className="text-3xl mb-2">📦➡️🧪</div>
+                                                            <h4 className="font-semibold text-gray-800 mb-1">I have material</h4>
+                                                            <p className="text-xs text-gray-600">You know how much raw material you have available</p>
+                                                        </div>
+                                                        
+                                                        <div
+                                                            onClick={() => setCurrentProduct(prev => ({ ...prev, calculationMode: 'units-to-material' }))}
+                                                            className={`border-2 rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
+                                                                currentProduct.calculationMode === 'units-to-material'
+                                                                    ? 'border-blue-500 bg-blue-50 shadow-md'
+                                                                    : 'border-gray-200 hover:border-gray-300'
+                                                            }`}
+                                                        >
+                                                            <div className="text-3xl mb-2">🎯➡️📦</div>
+                                                            <h4 className="font-semibold text-gray-800 mb-1">I want X units</h4>
+                                                            <p className="text-xs text-gray-600">You have a target number of units to produce</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Step 4: Input Amount or Target */}
+                                            {currentProduct.calculationMode && (
+                                                <div className="space-y-4 animate-fadeIn">
+                                                    <div className="flex items-center space-x-2 mb-4">
+                                                        <div className="w-8 h-8 bg-orange-600 text-white rounded-full flex items-center justify-center font-semibold">4</div>
+                                                        <h3 className="text-lg font-semibold text-gray-800">
+                                                            {currentProduct.calculationMode === 'material-to-units' ? 'Material Available' : 'Target Units'}
+                                                        </h3>
+                                                    </div>
+                                                    
+                                                    {currentProduct.calculationMode === 'material-to-units' ? (
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div>
+                                                                <label className="block text-sm font-medium mb-2 text-gray-700">Grams/mLs per unit</label>
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    value={currentProduct.amountPerUnit}
+                                                                    onChange={(e) => {
+                                                                        const value = e.target.value;
+                                                                        if (value === '') {
+                                                                            setCurrentProduct(prev => ({ ...prev, amountPerUnit: '' }));
+                                                                        } else {
+                                                                            const numValue = parseFloat(value);
+                                                                            if (!isNaN(numValue)) {
+                                                                                setCurrentProduct(prev => ({ ...prev, amountPerUnit: numValue.toString() }));
+                                                                            }
+                                                                        }
+                                                                    }}
+                                                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                    placeholder="100"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-sm font-medium mb-2 text-gray-700">How many units?</label>
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    value={currentProduct.numberOfUnits}
+                                                                    onChange={(e) => {
+                                                                        const value = e.target.value;
+                                                                        if (value === '') {
+                                                                            setCurrentProduct(prev => ({ ...prev, numberOfUnits: '' }));
+                                                                        } else {
+                                                                            const numValue = parseInt(value);
+                                                                            if (!isNaN(numValue) && numValue >= 0) {
+                                                                                setCurrentProduct(prev => ({ ...prev, numberOfUnits: numValue.toString() }));
+                                                                            }
+                                                                        }
+                                                                    }}
+                                                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                    placeholder="10"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div>
+                                                            <label className="block text-sm font-medium mb-2 text-gray-700">How many units do you want to produce?</label>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                value={currentProduct.targetUnits}
+                                                                onChange={(e) => {
+                                                                    const value = e.target.value;
+                                                                    if (value === '') {
+                                                                        setCurrentProduct(prev => ({ ...prev, targetUnits: '' }));
+                                                                    } else {
+                                                                        const numValue = parseInt(value);
+                                                                        if (!isNaN(numValue) && numValue >= 0) {
+                                                                            setCurrentProduct(prev => ({ ...prev, targetUnits: numValue.toString() }));
+                                                                        }
+                                                                    }
+                                                                }}
+                                                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                placeholder="100"
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Step 5: Fill Method */}
+                                            {currentProduct.selectedPackage && currentProduct.calculationMode && 
+                                             ((currentProduct.calculationMode === 'material-to-units' && currentProduct.amountPerUnit && currentProduct.numberOfUnits) || 
+                                              (currentProduct.calculationMode === 'units-to-material' && currentProduct.targetUnits)) && (
+                                                <div className="space-y-4 animate-fadeIn">
+                                                    <div className="flex items-center space-x-2 mb-4">
+                                                        <div className="w-8 h-8 bg-red-600 text-white rounded-full flex items-center justify-center font-semibold">5</div>
+                                                        <h3 className="text-lg font-semibold text-gray-800">Fill Method</h3>
+                                                    </div>
+                                                    
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div
+                                                            onClick={() => setCurrentProduct(prev => ({ ...prev, fillMethod: 'vats' }))}
+                                                            className={`border-2 rounded-lg p-6 cursor-pointer transition-all hover:shadow-md ${
+                                                                currentProduct.fillMethod === 'vats'
+                                                                    ? 'border-blue-500 bg-blue-50 shadow-md'
+                                                                    : 'border-gray-200 hover:border-gray-300'
+                                                            }`}
+                                                        >
+                                                            <div className="text-4xl mb-3">🏭</div>
+                                                            <h4 className="font-semibold text-gray-800 mb-2">From Vats</h4>
+                                                            <div className="text-sm text-gray-600">
+                                                                <div>Setup: $25</div>
+                                                                <div>Per unit: $0.40</div>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div
+                                                            onClick={() => setCurrentProduct(prev => ({ ...prev, fillMethod: 'fullsize' }))}
+                                                            className={`border-2 rounded-lg p-6 cursor-pointer transition-all hover:shadow-md ${
+                                                                currentProduct.fillMethod === 'fullsize'
+                                                                    ? 'border-blue-500 bg-blue-50 shadow-md'
+                                                                    : 'border-gray-200 hover:border-gray-300'
+                                                            }`}
+                                                        >
+                                                            <div className="text-4xl mb-3">📦</div>
+                                                            <h4 className="font-semibold text-gray-800 mb-2">From Full-size Units</h4>
+                                                            <div className="text-sm text-gray-600">
+                                                                <div>Setup: $50</div>
+                                                                <div>Per unit: $0.65</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Instant Results */}
+                                            {currentProduct.fillMethod && (
+                                                <div className="bg-gradient-to-r from-green-50 to-blue-50 p-6 rounded-lg border-2 border-green-200 animate-fadeIn">
+                                                    <div className="flex items-center space-x-2 mb-4">
+                                                        <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center">
+                                                            <Icon icon={Calculator} size={16} />
+                                                        </div>
+                                                        <h3 className="text-lg font-semibold text-gray-800">Instant Results</h3>
+                                                    </div>
+                                                    
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div className="bg-white p-4 rounded-lg text-center">
+                                                            <div className="text-2xl font-bold text-blue-600">{currentProduct.estimates.units}</div>
+                                                            <div className="text-sm text-gray-600">Estimated Units</div>
+                                                        </div>
+                                                        <div className="bg-white p-4 rounded-lg text-center">
+                                                            <div className="text-2xl font-bold text-green-600">${currentProduct.estimates.price.toFixed(2)}</div>
+                                                            <div className="text-sm text-gray-600">Total Cost</div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {/* Cost Breakdown */}
+                                                    {currentProduct.estimates.units > 0 && (
+                                                        <div className="mt-4 bg-white p-4 rounded-lg">
+                                                            <h4 className="text-sm font-semibold text-gray-700 mb-2">Cost Breakdown:</h4>
+                                                            <div className="space-y-1 text-sm">
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-gray-600">Setup Fee:</span>
+                                                                    <span className="font-medium">${pricing.fillMethod[currentProduct.fillMethod].setup.toFixed(2)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-gray-600">Filling ({currentProduct.estimates.units} × ${pricing.fillMethod[currentProduct.fillMethod].basePrice}):</span>
+                                                                    <span className="font-medium">${(currentProduct.estimates.units * pricing.fillMethod[currentProduct.fillMethod].basePrice).toFixed(2)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-gray-600">Packaging ({currentProduct.estimates.units} × ${currentProduct.selectedPackage.price}):</span>
+                                                                    <span className="font-medium">${(currentProduct.estimates.units * currentProduct.selectedPackage.price).toFixed(2)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between pt-2 border-t">
+                                                                    <span className="font-semibold text-gray-700">Total:</span>
+                                                                    <span className="font-bold text-green-600">${currentProduct.estimates.price.toFixed(2)}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    
+                                                    <div className="mt-4 text-center">
+                                                        <button
+                                                            onClick={saveProduct}
+                                                            disabled={!isProductComplete()}
+                                                            className={`inline-flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
+                                                                isProductComplete()
+                                                                    ? 'bg-green-600 text-white hover:bg-green-700 shadow-lg hover:shadow-xl'
+                                                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                            }`}
+                                                        >
+                                                            <Icon icon={Check} size={20} />
+                                                            <span>Add to Order</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Right Column - Simplified */}
+                            <div className="space-y-6">
+                                {/* Action Buttons */}
+                                <div className="space-y-3">
+                                    {!showProductForm && completedProducts.length > 0 && (
+                                        <button
+                                            onClick={startNewProduct}
+                                            className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                        >
+                                            <Icon icon={Plus} size={20} />
+                                            <span>Add Another Product</span>
+                                        </button>
+                                    )}
+                                    
+                                    {completedProducts.length > 0 && (
+                                        <button
+                                            onClick={submitOrder}
+                                            className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg hover:shadow-xl transition-all transform hover:scale-105"
+                                        >
+                                            <Icon icon={Check} size={20} />
+                                            <span>Submit Order ({completedProducts.length} products)</span>
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Detailed Order Summary */}
+                                {completedProducts.length > 0 && !showProductForm && (
+                                    <div className="bg-white rounded-xl shadow-lg p-6 animate-fadeIn">
+                                        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                                            <Icon icon={Package} className="mr-2" size={20} />
+                                            Order Details
+                                        </h3>
+                                        
+                                        <div className="space-y-4">
+                                            {completedProducts.map((product) => (
+                                                <div key={product.id} className="border rounded-lg p-4 bg-gray-50">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <div className="flex-1">
+                                                            <h4 className="font-semibold text-gray-800">{product.name}</h4>
+                                                            <p className="text-sm text-gray-600">
+                                                                {product.calculationMode === 'material-to-units' 
+                                                                    ? `${product.numberOfUnits} units × ${product.amountPerUnit} grams/mLs = ${(product.numberOfUnits * product.amountPerUnit).toFixed(0)} total → ${product.estimates.units} final units`
+                                                                    : `${product.targetUnits} units target → ${product.estimates.materialNeeded.toFixed(1)} grams/mLs needed`
+                                                                }
+                                                            </p>
+                                                            <p className="text-sm text-gray-600">
+                                                                {product.selectedPackage.name} via {pricing.fillMethod[product.fillMethod].name}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex space-x-2">
+                                                            <button
+                                                                onClick={() => editProduct(product.id)}
+                                                                className="text-blue-600 hover:bg-blue-50 p-1 rounded"
+                                                            >
+                                                                <Icon icon={Edit3} size={14} />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => deleteProduct(product.id)}
+                                                                className="text-red-600 hover:bg-red-50 p-1 rounded"
+                                                            >
+                                                                <Icon icon={Trash2} size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <span className="text-lg font-bold text-green-600">${product.estimates.price.toFixed(2)}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Sticky Bottom Running Total */}
+                    <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-2xl border-t-4 border-blue-400">
+                        <div className="max-w-6xl mx-auto p-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-2 flex-1">
+                                    <Icon icon={ShoppingCart} size={24} className="flex-shrink-0" />
+                                    <div className="flex-1">
+                                        <div className="text-lg font-semibold">Running Total</div>
+                                        <div className="text-sm opacity-90">
+                                            {getTotalEstimates().units} total units
+                                        </div>
+                                        
+                                        {/* Product Summary List */}
+                                        {(completedProducts.length > 0 || (showProductForm && currentProduct.name)) && (
+                                            <div className="mt-2 flex flex-wrap gap-2">
+                                                {completedProducts.map((product, index) => (
+                                                    <div key={product.id} className="bg-white bg-opacity-20 backdrop-blur-sm rounded-full px-3 py-1 text-xs flex items-center space-x-1">
+                                                        <span className="font-medium">{product.name}</span>
+                                                        <span className="opacity-75">({product.estimates.units} units)</span>
+                                                    </div>
+                                                ))}
+                                                {showProductForm && currentProduct.name && (
+                                                    <div className="bg-yellow-400 bg-opacity-30 backdrop-blur-sm rounded-full px-3 py-1 text-xs flex items-center space-x-1 animate-pulse">
+                                                        <span className="font-medium">{currentProduct.name}</span>
+                                                        <span className="opacity-75">
+                                                            {currentProduct.estimates.units > 0 
+                                                                ? `(${currentProduct.estimates.units} units) - configuring...`
+                                                                : '- configuring...'}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                <div className="text-right ml-4">
+                                    {/* Current Product Price (if configuring) */}
+                                    {showProductForm && currentProduct.estimates.price > 0 && (
+                                        <div className="text-sm opacity-90 mb-1">
+                                            + ${currentProduct.estimates.price.toFixed(2)} (configuring)
+                                        </div>
+                                    )}
+                                    
+                                    <div className="text-3xl font-bold">
+                                        ${getTotalEstimates().price.toFixed(2)}
+                                    </div>
+                                    
+                                    {completedProducts.length > 0 && (
+                                        <div className="text-sm opacity-90">
+                                            {completedProducts.length} completed product{completedProducts.length !== 1 ? 's' : ''}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Customer Details Modal */}
+                    {showCustomerForm && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+                                <h3 className="text-xl font-bold text-gray-800 mb-4">Customer Information</h3>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-2 text-gray-700">Name</label>
+                                        <input
+                                            type="text"
+                                            value={customerDetails.name}
+                                            onChange={(e) => setCustomerDetails(prev => ({ ...prev, name: e.target.value }))}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            placeholder="Your name"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-2 text-gray-700">Email</label>
+                                        <input
+                                            type="email"
+                                            value={customerDetails.email}
+                                            onChange={(e) => setCustomerDetails(prev => ({ ...prev, email: e.target.value }))}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            placeholder="your@email.com"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex space-x-3 mt-6">
+                                    <button
+                                        onClick={() => setShowCustomerForm(false)}
+                                        className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={finalizeOrder}
+                                        className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                                    >
+                                        Submit Order
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // Render the app
+        ReactDOM.render(<FillingServicesWizard />, document.getElementById('root'));
+    </script>
+</body>
+</html>
