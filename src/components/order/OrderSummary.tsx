@@ -1,5 +1,5 @@
 // components/order/OrderSummary.tsx
-import React, { useState } from 'react';
+import React /*, { useState }*/ from 'react';
 import { ShoppingCart, Plus, Loader, Check } from 'lucide-react';
 import type { Product } from '../../lib/types';
 import { ProductCard } from './ProductCard';

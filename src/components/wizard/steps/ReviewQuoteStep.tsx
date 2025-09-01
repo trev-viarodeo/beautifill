@@ -1,7 +1,7 @@
 // components/wizard/steps/ReviewQuoteStep.tsx
 import React from 'react';
 import { Check, Calculator, TrendingUp } from 'lucide-react';
-import type { Product, NextVolumeTier } from '../../../lib/types';
+import type { Product/*, NextVolumeTier*/ } from '../../../lib/types';
 import { pricing } from '../../../lib/constants';
 import { getNextVolumeTier } from '../../../lib/calculations';
 import { Button } from  '../../common';
